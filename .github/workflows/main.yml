@@ -63,7 +63,6 @@ jobs:
           source_branch="${{ github.event.pull_request.head.ref }}"
           echo "Source branch: $source_branch"
 
-          bump="patch" # default
 
           if [[ "${{ github.event.pull_request.labels[*] }}" == *"major-bump"* ]]; then
             bump="major"
