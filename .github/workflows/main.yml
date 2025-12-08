@@ -44,8 +44,6 @@ jobs:
           echo "Source branch: $source_branch"
           echo "PR labels: $labels"
           
-          bump="patch" # default
-          
           # Check for major-bump label first (highest priority)
           if echo "$labels" | grep -q "major-bump"; then
             bump="major"
@@ -55,6 +53,9 @@ jobs:
           # Check if branch starts with hotfix/
           elif [[ "$source_branch" == hotfix/* ]]; then
             bump="patch"
+          else
+            echo "Error: Branch does not match any versioning pattern (feature/*, hotfix/*) and no major-bump label found"
+            exit 1
           fi
           
           echo "Bump type: $bump"
