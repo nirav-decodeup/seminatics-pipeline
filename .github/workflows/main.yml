@@ -48,10 +48,10 @@ jobs:
           if echo "$labels" | grep -q "major-bump"; then
             bump="major"
           # Check if branch starts with feature/
-          elif [[ "$source_branch" == feature/* ]]; then
+          elif [[ "$source_branch" == feature ]]; then
             bump="minor"
           # Check if branch starts with hotfix/
-          elif [[ "$source_branch" == hotfix/* ]]; then
+          elif [[ "$source_branch" == hotfix ]]; then
             bump="patch"
           else
             echo "Error: Branch does not match any versioning pattern (feature/*, hotfix/*) and no major-bump label found"
