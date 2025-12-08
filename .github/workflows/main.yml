@@ -21,9 +21,13 @@ jobs:
           fetch-tags: true
           token: ${{ secrets.TOKEN }}
 
+      - name: Wait for GitHub to sync tags
+        run: sleep 8
+
       - name: Fetch tags
         run: |
           git fetch --tags --force --prune
+          git fetch origin +refs/tags/*:refs/tags/* --force
           git tag -l
 
       - name: Get latest tag
