@@ -12,9 +12,7 @@ jobs:
   bump-version:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-
     steps:
-      # --- CHECKOUT FULL REPO ---
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -22,67 +20,52 @@ jobs:
           fetch-tags: true
           token: ${{ secrets.TOKEN }}
 
-      # --- WAIT FOR GITHUB TO SYNC TAGS ---
-      - name: Wait for GitHub tag sync
+      - name: Wait for GitHub to sync tags
         run: sleep 8
 
-      # --- FORCE REFRESH ALL TAGS ---
-      - name: Fetch tags (full refresh)
+      - name: Fetch tags
         run: |
           git fetch --tags --force --prune
           git fetch origin +refs/tags/*:refs/tags/* --force
           git tag -l
 
-      # --- GET LATEST TAG WITH RETRY ---
       - name: Get latest tag
         id: get_tag
         run: |
-          # First attempt
-          latest=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null)
-
-          # Retry if empty (GitHub race condition)
-          if [ -z "$latest" ]; then
-            echo "Retrying tag fetch..."
-            sleep 5
-            git fetch --tags --force
-            latest=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null)
-          fi
-
-          # Final fallback
-          if [ -z "$latest" ]; then
-            latest="0.0.0"
-          fi
-
-          echo "Latest tag identified: $latest"
+          latest=$(git describe --tags $(git rev-list --tags --max-count=1) 2>/dev/null || echo "0.0.0")
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
-      # --- DETERMINE BUMP TYPE ---
       - name: Determine bump type
         id: bump_type
         run: |
           source_branch="${{ github.event.pull_request.head.ref }}"
+          labels="${{ toJson(github.event.pull_request.labels.*.name) }}"
+          
           echo "Source branch: $source_branch"
-
+          echo "PR labels: $labels"
+          
           bump="patch" # default
-
-          if [[ "${{ github.event.pull_request.labels[*] }}" == *"major-bump"* ]]; then
+          
+          # Check for major-bump label first (highest priority)
+          if echo "$labels" | grep -q "major-bump"; then
             bump="major"
-          elif [[ "$source_branch" == feature ]]; then
+          # Check if branch starts with feature/
+          elif [[ "$source_branch" == feature/* ]]; then
             bump="minor"
-          elif [[ "$source_branch" == hotfix ]]; then
+          # Check if branch starts with hotfix/
+          elif [[ "$source_branch" == hotfix/* ]]; then
             bump="patch"
           fi
-
-          echo "Using bump: $bump"
+          
+          echo "Bump type: $bump"
           echo "bump=$bump" >> $GITHUB_OUTPUT
 
-      # --- CALCULATE NEW VERSION ---
       - name: Calculate new version
         id: new_version
         run: |
           version="${{ steps.get_tag.outputs.latest }}"
           IFS='.' read -r major minor patch <<< "$version"
-
+          
           case "${{ steps.bump_type.outputs.bump }}" in
             major)
               major=$((major + 1))
@@ -97,12 +80,11 @@ jobs:
               patch=$((patch + 1))
               ;;
           esac
-
+          
           new="$major.$minor.$patch"
           echo "New version: $new"
           echo "new_version=$new" >> $GITHUB_OUTPUT
 
-      # --- CREATE AND PUSH TAG ---
       - name: Create and push tag
         run: |
           git tag ${{ steps.new_version.outputs.new_version }}
