@@ -14,6 +14,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # --- CHECKOUT FULL REPO ---
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -21,21 +22,41 @@ jobs:
           fetch-tags: true
           token: ${{ secrets.TOKEN }}
 
-      - name: Wait for GitHub to sync tags
+      # --- WAIT FOR GITHUB TO SYNC TAGS ---
+      - name: Wait for GitHub tag sync
         run: sleep 8
 
-      - name: Fetch tags
+      # --- FORCE REFRESH ALL TAGS ---
+      - name: Fetch tags (full refresh)
         run: |
           git fetch --tags --force --prune
           git fetch origin +refs/tags/*:refs/tags/* --force
           git tag -l
 
+      # --- GET LATEST TAG WITH RETRY ---
       - name: Get latest tag
         id: get_tag
         run: |
-          latest=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null || echo "0.0.0")
+          # First attempt
+          latest=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null)
+
+          # Retry if empty (GitHub race condition)
+          if [ -z "$latest" ]; then
+            echo "Retrying tag fetch..."
+            sleep 5
+            git fetch --tags --force
+            latest=$(git describe --tags `git rev-list --tags --max-count=1` 2>/dev/null)
+          fi
+
+          # Final fallback
+          if [ -z "$latest" ]; then
+            latest="0.0.0"
+          fi
+
+          echo "Latest tag identified: $latest"
           echo "latest=$latest" >> $GITHUB_OUTPUT
 
+      # --- DETERMINE BUMP TYPE ---
       - name: Determine bump type
         id: bump_type
         run: |
@@ -52,8 +73,10 @@ jobs:
             bump="patch"
           fi
 
+          echo "Using bump: $bump"
           echo "bump=$bump" >> $GITHUB_OUTPUT
 
+      # --- CALCULATE NEW VERSION ---
       - name: Calculate new version
         id: new_version
         run: |
@@ -76,8 +99,10 @@ jobs:
           esac
 
           new="$major.$minor.$patch"
+          echo "New version: $new"
           echo "new_version=$new" >> $GITHUB_OUTPUT
 
+      # --- CREATE AND PUSH TAG ---
       - name: Create and push tag
         run: |
           git tag ${{ steps.new_version.outputs.new_version }}
