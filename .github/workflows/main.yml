@@ -67,9 +67,9 @@ jobs:
 
           if [[ "${{ github.event.pull_request.labels[*] }}" == *"major-bump"* ]]; then
             bump="major"
-          elif [[ "$source_branch" == feature/* ]]; then
+          elif [[ "$source_branch" == feature ]]; then
             bump="minor"
-          elif [[ "$source_branch" == hotfix/* ]]; then
+          elif [[ "$source_branch" == hotfix ]]; then
             bump="patch"
           fi
 
