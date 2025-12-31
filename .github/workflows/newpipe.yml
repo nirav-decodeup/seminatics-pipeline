@@ -63,15 +63,22 @@ jobs:
       # Bump version.json + tag
       # -------------------------------
       - name: Bump versions & create tags
+        env:
+          AUTH_CHANGED: ${{ steps.changes.outputs.auth }}
+          OWNER_CHANGED: ${{ steps.changes.outputs.owner }}
+          BUMP_TYPE: ${{ steps.bump.outputs.type }}
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
 
           for app in auth owner; do
-            changed="${{ steps.changes.outputs[format('{0}', app)] }}"
+            if [ "$app" = "auth" ] && [ "$AUTH_CHANGED" != "true" ]; then
+              echo "No changes in auth, skipping"
+              continue
+            fi
 
-            if [ "$changed" != "true" ]; then
-              echo "No changes in $app, skipping"
+            if [ "$app" = "owner" ] && [ "$OWNER_CHANGED" != "true" ]; then
+              echo "No changes in owner, skipping"
               continue
             fi
 
@@ -80,7 +87,7 @@ jobs:
             current=$(jq -r .version "$version_file")
             IFS='.' read -r major minor patch <<< "$current"
 
-            case "${{ steps.bump.outputs.type }}" in
+            case "$BUMP_TYPE" in
               major) major=$((major+1)); minor=0; patch=0 ;;
               minor) minor=$((minor+1)); patch=0 ;;
               patch) patch=$((patch+1)) ;;
@@ -94,7 +101,6 @@ jobs:
 
             git add "$version_file"
             git commit -m "chore($app): release v$new"
-
             git tag "$app-v$new"
           done
 
