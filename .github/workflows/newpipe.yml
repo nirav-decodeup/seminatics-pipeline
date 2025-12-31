@@ -1,6 +1,6 @@
 name: Version Bump (Monorepo)
 
-on:
+"on":
   pull_request:
     types: [closed]
     branches: [main]
