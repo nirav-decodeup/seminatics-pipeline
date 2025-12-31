@@ -18,7 +18,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-          token: ${{ secrets.TOKEN }
+          token: ${{ secrets.TOKEN }}
 
       # -------------------------------
       # Detect changed apps
