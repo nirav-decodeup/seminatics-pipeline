@@ -1,0 +1,78 @@
+name: Version Bump (Monorepo)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      owner: ${{ steps.filter.outputs.owner }}
+      auth: ${{ steps.filter.outputs.auth }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            owner:
+              - 'apps/owner/**'
+            auth:
+              - 'apps/auth/**'
+
+  bump-owner:
+    needs: detect-changes
+    if: needs.detect-changes.outputs.owner == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version bump
+        id: bump
+        run: |
+          COMMITS=$(git log --pretty=%s origin/main~1..HEAD)
+
+          if echo "$COMMITS" | grep -q "BREAKING CHANGE"; then
+            echo "type=major" >> $GITHUB_OUTPUT
+          elif echo "$COMMITS" | grep -q "^feat(owner):"; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+          else
+            echo "type=patch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Bump version.json
+        run: |
+          cd apps/owner
+          VERSION=$(jq -r .version version.json)
+
+          IFS='.' read MAJOR MINOR PATCH <<< "$VERSION"
+
+          case "${{ steps.bump.outputs.type }}" in
+            major) MAJOR=$((MAJOR+1)); MINOR=0; PATCH=0 ;;
+            minor) MINOR=$((MINOR+1)); PATCH=0 ;;
+            patch) PATCH=$((PATCH+1)) ;;
+          esac
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+
+          jq ".version=\"$NEW_VERSION\"" version.json > tmp.json
+          mv tmp.json version.json
+
+          echo "NEW_VERSION=$NEW_VERSION" >> $GITHUB_ENV
+
+      - name: Commit & tag
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add apps/owner/version.json
+          git commit -m "chore(owner): release v$NEW_VERSION"
+          git tag owner-v$NEW_VERSION
+
+          git push origin main --tags
