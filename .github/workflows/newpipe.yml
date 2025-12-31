@@ -27,10 +27,11 @@ jobs:
       - name: Detect changed apps
         id: changes
         run: |
-          files=$(git diff --name-only \
-            ${{ github.event.pull_request.base.sha }} \
-            ${{ github.event.pull_request.head.sha }})
-
+          files=$(git diff --name-only HEAD~1 HEAD)
+      
+          echo "Changed files:"
+          echo "$files"
+      
           for app in auth owner; do
             if echo "$files" | grep -q "^apps/$app/"; then
               echo "$app=true" >> $GITHUB_OUTPUT
@@ -38,6 +39,7 @@ jobs:
               echo "$app=false" >> $GITHUB_OUTPUT
             fi
           done
+
 
       # -------------------------------
       # Determine bump type
