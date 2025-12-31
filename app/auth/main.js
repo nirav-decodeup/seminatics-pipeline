@@ -1,1 +1,1 @@
-console.log("Hello, maincds!");
+console.log("Hello, mainjs!");
