@@ -33,12 +33,13 @@ jobs:
           echo "$files"
       
           for app in auth owner; do
-            if echo "$files" | grep -q "^apps/$app/"; then
+            if echo "$files" | grep -q "^app/$app/"; then
               echo "$app=true" >> $GITHUB_OUTPUT
             else
               echo "$app=false" >> $GITHUB_OUTPUT
             fi
           done
+
 
 
       # -------------------------------
@@ -86,7 +87,7 @@ jobs:
               continue
             fi
 
-            version_file="apps/$app/version.json"
+            version_file="app/$app/version.json"
 
             current=$(jq -r .version "$version_file")
             IFS='.' read -r major minor patch <<< "$current"
