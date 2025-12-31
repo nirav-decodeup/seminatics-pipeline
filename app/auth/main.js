@@ -1,1 +1,1 @@
-console.log("Hello, mainfgfsa!");
+console.log("Hello, main!");
