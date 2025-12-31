@@ -1,1 +1,1 @@
-console.log("Hello, mains!");
+console.log("Hello, maincds!");
