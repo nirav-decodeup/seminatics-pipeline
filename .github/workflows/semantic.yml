@@ -16,7 +16,9 @@ on:
     secrets:
       TOKEN:
         required: true
-
+  
+  workflow_dispatch:
+  
 permissions:
   contents: write
 
