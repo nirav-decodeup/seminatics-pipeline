@@ -67,9 +67,11 @@ jobs:
       - name: Determine bump type
         id: bump
         run: |
-          branch="${{ github.ref_name }}"
+          branch="${{ github.head_ref || github.ref_name }}"
           labels="${{ toJson(github.event.pull_request.labels.*.name) }}"
-
+      
+          echo "Detected branch: $branch"
+      
           if echo "$labels" | grep -q "major-bump"; then
             type=major
           elif [[ "$branch" == feature/* ]]; then
@@ -79,8 +81,9 @@ jobs:
           else
             type=patch
           fi
-
+      
           echo "type=$type" >> $GITHUB_OUTPUT
+
 
       # -------------------------------
       # Bump versions, tag & release
