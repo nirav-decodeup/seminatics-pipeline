@@ -1,0 +1,124 @@
+name: Version Bump & Release (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      apps_path:
+        description: "Path containing services"
+        required: false
+        default: "apps"
+        type: string
+      service_glob:
+        description: "Service folder glob"
+        required: false
+        default: "*-service"
+        type: string
+    secrets:
+      TOKEN:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.TOKEN }}
+
+      # -------------------------------
+      # Detect changed services
+      # -------------------------------
+      - name: Detect changed services
+        id: changes
+        run: |
+          files=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$files"
+
+          services=()
+
+          for dir in ${{ inputs.apps_path }}/${{ inputs.service_glob }}; do
+            service=$(basename "$dir")
+            if echo "$files" | grep -q "^${{ inputs.apps_path }}/$service/"; then
+              services+=("$service")
+            fi
+          done
+
+          echo "services=${services[*]}" >> $GITHUB_OUTPUT
+
+      # -------------------------------
+      # Determine bump type
+      # -------------------------------
+      - name: Determine bump type
+        id: bump
+        run: |
+          branch="${{ github.ref_name }}"
+          labels="${{ toJson(github.event.pull_request.labels.*.name) }}"
+
+          if echo "$labels" | grep -q "major-bump"; then
+            type=major
+          elif [[ "$branch" == feature/* ]]; then
+            type=minor
+          elif [[ "$branch" == hotfix/* ]]; then
+            type=patch
+          else
+            echo "Invalid branch naming"
+            exit 1
+          fi
+
+          echo "type=$type" >> $GITHUB_OUTPUT
+
+      # -------------------------------
+      # Bump versions, tag & release
+      # -------------------------------
+      - name: Bump versions, create tags & releases
+        env:
+          SERVICES: ${{ steps.changes.outputs.services }}
+          BUMP_TYPE: ${{ steps.bump.outputs.type }}
+          GH_TOKEN: ${{ secrets.TOKEN }}
+        run: |
+          set -e
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          for service in $SERVICES; do
+            version_file="${{ inputs.apps_path }}/$service/version.json"
+
+            [ -f "$version_file" ] || continue
+
+            current=$(jq -r .version "$version_file")
+            IFS='.' read -r major minor patch <<< "$current"
+
+            case "$BUMP_TYPE" in
+              major) major=$((major+1)); minor=0; patch=0 ;;
+              minor) minor=$((minor+1)); patch=0 ;;
+              patch) patch=$((patch+1)) ;;
+            esac
+
+            new="$major.$minor.$patch"
+            echo "Bumping $service → $new"
+
+            jq ".version=\"$new\"" "$version_file" > tmp.json
+            mv tmp.json "$version_file"
+
+            git add "$version_file"
+            git commit -m "chore($service): release v$new"
+
+            tag="${service%-service}-v$new"
+            git tag "$tag"
+
+            git push origin main
+            git push origin "$tag"
+
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes "Release of $service version $new"
+
+          done
