@@ -124,7 +124,7 @@ jobs:
             mv tmp.json "$version_file"
 
             git add "$version_file"
-            git commit -m "chore($service): release v$new"
+            git commit -m "chore($service): release v$new [skip ci]"
 
             tag="${service%-service}-v$new"
             git tag "$tag"
