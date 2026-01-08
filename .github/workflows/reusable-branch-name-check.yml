@@ -1,0 +1,21 @@
+name: Reusable - Branch name check
+
+on:
+  workflow_call:
+
+jobs:
+  validate-branch-name:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate branch name
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          echo "Checking branch name: $BRANCH"
+
+          if [[ "$BRANCH" =~ ^feature\/.+$ || "$BRANCH" =~ ^hotfix\/.+$ ]]; then
+            echo "✅ Branch name is valid."
+          else
+            echo "❌ Invalid branch name: $BRANCH"
+            echo "Branch must start with 'feature/' or 'hotfix/'."
+            exit 1
+          fi
