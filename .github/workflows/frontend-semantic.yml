@@ -87,7 +87,7 @@ jobs:
           git add "$VERSION_FILE"
           git commit -m "chore(frontend): release v$new [skip ci]"
 
-          tag="frontend-v$new"
+          tag="v$new"
           git tag "$tag"
 
           git push origin main
