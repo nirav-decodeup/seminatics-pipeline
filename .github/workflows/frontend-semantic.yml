@@ -1,0 +1,98 @@
+name: FE Version Bump & Release (Reusable)
+
+on:
+  workflow_call:
+    secrets:
+      TOKEN:
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+
+    # Run only on merge to main (not tags, not bot)
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.TOKEN }}
+
+      # ---------------------------------
+      # Determine semantic bump type
+      # ---------------------------------
+      - name: Determine bump type
+        id: bump
+        run: |
+          branch="${{ github.event.pull_request.head.ref }}"
+          labels="${{ toJson(github.event.pull_request.labels.*.name) }}"
+
+          echo "Merged branch: $branch"
+
+          if echo "$labels" | grep -q "major-bump"; then
+            type=major
+          elif [[ "$branch" == feature/* ]]; then
+            type=minor
+          elif [[ "$branch" == hotfix/* ]]; then
+            type=patch
+          else
+            type=patch
+          fi
+
+          echo "type=$type" >> $GITHUB_OUTPUT
+
+      # ---------------------------------
+      # Bump version.json, tag & release
+      # ---------------------------------
+      - name: Bump version, create tag & release
+        env:
+          BUMP_TYPE: ${{ steps.bump.outputs.type }}
+          GH_TOKEN: ${{ secrets.TOKEN }}
+        run: |
+          set -e
+
+          VERSION_FILE="version.json"
+
+          if [ ! -f "$VERSION_FILE" ]; then
+            echo "version.json not found"
+            exit 1
+          fi
+
+          current=$(jq -r .version "$VERSION_FILE")
+          IFS='.' read -r major minor patch <<< "$current"
+
+          case "$BUMP_TYPE" in
+            major) major=$((major+1)); minor=0; patch=0 ;;
+            minor) minor=$((minor+1)); patch=0 ;;
+            patch) patch=$((patch+1)) ;;
+          esac
+
+          new="$major.$minor.$patch"
+          echo "Bumping frontend version → $new"
+
+          jq ".version=\"$new\"" "$VERSION_FILE" > tmp.json
+          mv tmp.json "$VERSION_FILE"
+
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+
+          git add "$VERSION_FILE"
+          git commit -m "chore(frontend): release v$new [skip ci]"
+
+          tag="frontend-v$new"
+          git tag "$tag"
+
+          git push origin main
+          git push origin "$tag"
+
+          gh release create "$tag" \
+            --title "$tag" \
+            --notes "Frontend release version $new"
