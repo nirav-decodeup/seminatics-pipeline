@@ -128,7 +128,7 @@ jobs:
       
             tag="${service%-service}-v$new"
       
-            changelog=$(git log -1 --pretty=format:"- %s" HEAD~1)
+            changelog=$(git log --no-merges -1 --pretty=format:"- %s")
       
             git tag "$tag"
       
