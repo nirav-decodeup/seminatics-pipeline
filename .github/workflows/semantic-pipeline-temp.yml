@@ -119,6 +119,8 @@ jobs:
       
             new="$major.$minor.$patch"
             echo "Bumping $service → $new"
+
+            changelog=$(git log --no-merges -1 --pretty=format:"- %s")
       
             jq ".version=\"$new\"" "$version_file" > tmp.json
             mv tmp.json "$version_file"
@@ -128,7 +130,6 @@ jobs:
       
             tag="${service%-service}-v$new"
       
-            changelog=$(git log --no-merges -1 --pretty=format:"- %s")
       
             git tag "$tag"
       
