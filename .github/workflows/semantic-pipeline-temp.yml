@@ -128,13 +128,7 @@ jobs:
       
             tag="${service%-service}-v$new"
       
-            previous_tag=$(git tag --list "${service%-service}-v*" --sort=-v:refname | sed -n '2p')
-      
-            if [ -z "$previous_tag" ]; then
-              changelog=$(git log --pretty=format:"- %s")
-            else
-              changelog=$(git log ${previous_tag}..HEAD --pretty=format:"- %s")
-            fi
+            changelog=$(git log -1 --pretty=format:"- %s")
       
             git tag "$tag"
       
