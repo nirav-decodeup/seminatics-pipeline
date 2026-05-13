@@ -1,0 +1,147 @@
+name: Version Bump & Release (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      apps_path:
+        description: "Path containing services"
+        required: false
+        default: "apps"
+        type: string
+      service_glob:
+        description: "Service folder glob"
+        required: false
+        default: "*-service"
+        type: string
+    secrets:
+      TOKEN:
+        required: true
+  
+  workflow_dispatch:
+  
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+
+    if: |
+      github.actor != 'github-actions[bot]' &&
+      !startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.TOKEN }}
+
+      # -------------------------------
+      # Detect changed services (PR-safe)
+      # -------------------------------
+      - name: Detect changed services
+        id: changes
+        run: |
+          files=$(git diff --name-only \
+            ${{ github.event.pull_request.base.sha }} \
+            ${{ github.event.pull_request.head.sha }})
+
+          echo "Changed files:"
+          echo "$files"
+
+          services=()
+
+          for dir in ${{ inputs.apps_path }}/${{ inputs.service_glob }}; do
+            service=$(basename "$dir")
+            if echo "$files" | grep -q "^${{ inputs.apps_path }}/$service/"; then
+              services+=("$service")
+            fi
+          done
+
+          if [ ${#services[@]} -eq 0 ]; then
+            echo "No services changed"
+          fi
+
+          echo "services=${services[*]}" >> $GITHUB_OUTPUT
+
+      # -------------------------------
+      # Determine bump type
+      # -------------------------------
+      - name: Determine bump type
+        id: bump
+        run: |
+          branch="${{ github.head_ref || github.ref_name }}"
+          labels="${{ toJson(github.event.pull_request.labels.*.name) }}"
+      
+          echo "Detected branch: $branch"
+      
+          if echo "$labels" | grep -q "major-bump"; then
+            type=major
+          elif [[ "$branch" == feature/* ]]; then
+            type=minor
+          elif [[ "$branch" == hotfix/* ]]; then
+            type=patch
+          else
+            type=patch
+          fi
+      
+          echo "type=$type" >> $GITHUB_OUTPUT
+
+
+      # -------------------------------
+      # Bump versions, tag & release
+      # -------------------------------
+      - name: Bump versions, create tags & releases
+        if: steps.changes.outputs.services != ''
+        env:
+          SERVICES: ${{ steps.changes.outputs.services }}
+          BUMP_TYPE: ${{ steps.bump.outputs.type }}
+          GH_TOKEN: ${{ secrets.TOKEN }}
+        run: |
+          set -e
+      
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+      
+          for service in $SERVICES; do
+            version_file="${{ inputs.apps_path }}/$service/version.json"
+            [ -f "$version_file" ] || continue
+      
+            current=$(jq -r .version "$version_file")
+            IFS='.' read -r major minor patch <<< "$current"
+      
+            case "$BUMP_TYPE" in
+              major) major=$((major+1)); minor=0; patch=0 ;;
+              minor) minor=$((minor+1)); patch=0 ;;
+              patch) patch=$((patch+1)) ;;
+            esac
+      
+            new="$major.$minor.$patch"
+            echo "Bumping $service → $new"
+      
+            jq ".version=\"$new\"" "$version_file" > tmp.json
+            mv tmp.json "$version_file"
+      
+            git add "$version_file"
+            git commit -m "chore($service): release v$new [skip ci]"
+      
+            tag="${service%-service}-v$new"
+      
+            previous_tag=$(git tag --list "${service%-service}-v*" --sort=-v:refname | sed -n '2p')
+      
+            if [ -z "$previous_tag" ]; then
+              changelog=$(git log --pretty=format:"- %s")
+            else
+              changelog=$(git log ${previous_tag}..HEAD --pretty=format:"- %s")
+            fi
+      
+            git tag "$tag"
+      
+            git push origin main
+            git push origin "$tag"
+      
+            gh release create "$tag" \
+              --title "$tag" \
+              --notes "$changelog"
+          done
