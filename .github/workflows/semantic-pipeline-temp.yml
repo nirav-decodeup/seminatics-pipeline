@@ -1,4 +1,4 @@
-name: Version Bump & Release (Reusable)
+name: Version Bumps
 
 on:
   workflow_call:
@@ -17,7 +17,7 @@ on:
       TOKEN:
         required: true
   
-  #workflow_dispatch:
+  workflow_dispatch:
   
 permissions:
   contents: write
