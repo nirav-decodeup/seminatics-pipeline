@@ -120,7 +120,11 @@ jobs:
             new="$major.$minor.$patch"
             echo "Bumping $service → $new"
 
-            changelog=$(git log --no-merges -1 --pretty=format:"- %s")
+            changelog=$(git log \
+              --no-merges \
+              --pretty=format:"- %s" \
+              ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})
+            
       
             jq ".version=\"$new\"" "$version_file" > tmp.json
             mv tmp.json "$version_file"
